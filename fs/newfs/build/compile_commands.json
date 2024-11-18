@@ -1,0 +1,12 @@
+[
+{
+  "directory": "/home/students/220110221/Scratches/user-land-filesystem/fs/newfs/build",
+  "command": "/usr/bin/gcc  -I/home/students/220110221/Scratches/user-land-filesystem/fs/newfs/./include  -D_FILE_OFFSET_BITS=64 -no-pie -g -Wall --pedantic -g -o CMakeFiles/deadpool.dir/src/deadpool.c.o -c /home/students/220110221/Scratches/user-land-filesystem/fs/newfs/src/deadpool.c",
+  "file": "/home/students/220110221/Scratches/user-land-filesystem/fs/newfs/src/deadpool.c"
+},
+{
+  "directory": "/home/students/220110221/Scratches/user-land-filesystem/fs/newfs/build",
+  "command": "/usr/bin/gcc  -I/home/students/220110221/Scratches/user-land-filesystem/fs/newfs/./include  -D_FILE_OFFSET_BITS=64 -no-pie -g -Wall --pedantic -g -o CMakeFiles/deadpool.dir/src/deadpool_util.c.o -c /home/students/220110221/Scratches/user-land-filesystem/fs/newfs/src/deadpool_util.c",
+  "file": "/home/students/220110221/Scratches/user-land-filesystem/fs/newfs/src/deadpool_util.c"
+}
+]

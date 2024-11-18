@@ -7,5 +7,6 @@
         "sfs.h": "c",
         "ddriver.h": "c",
         "errno.h": "c"
-    }
+    },
+    "cmake.ignoreCMakeListsMissing": true
 }

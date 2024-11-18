@@ -1,0 +1,1 @@
+/usr/bin/gcc  -D_FILE_OFFSET_BITS=64 -no-pie -g -Wall --pedantic -g -rdynamic CMakeFiles/deadpool.dir/src/deadpool.c.o CMakeFiles/deadpool.dir/src/deadpool_util.c.o -o deadpool  -lfuse /home/students/220110221/lib/libddriver.a 

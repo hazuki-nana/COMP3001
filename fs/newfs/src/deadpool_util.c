@@ -731,7 +731,7 @@ int deadpool_mount(struct custom_options options){
     }
 
     if (is_init) {                                    /* 分配根节点 */
-        root_inode = deadpool_alloc_inode(root_dentry);
+        root_inode = deadpool_alloc_inode(root_dentry);//第一次挂载分配0号inode
         deadpool_sync_inode(root_inode);
     }
     
@@ -792,7 +792,7 @@ int deadpool_umount() {
     //     return -DEADPOOL_ERROR_IO;
     // }
 
-    deadpool_drop_inode(deadpool_super.root_dentry->inode);
+    // deadpool_drop_inode(deadpool_super.root_dentry->inode);
     free(deadpool_super.map_inode);
     free(deadpool_super.map_data);
     ddriver_close(DEADPOOL_DRIVER());

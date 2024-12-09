@@ -684,10 +684,13 @@ int deadpool_mount(struct custom_options options){
 
         inode_num  =  (deadpool_super.sz_disk) / (sizeof(struct deadpool_inode_d) + 6 * DEADPOOL_BLK_SZ());
 
+        int inode_blks = (inode_num * sizeof(struct deadpool_inode_d)) % DEADPOOL_BLK_SZ() == 0 ? \
+        ((inode_num * sizeof(struct deadpool_inode_d)) / DEADPOOL_BLK_SZ()) : ((inode_num * sizeof(struct deadpool_inode_d)) / DEADPOOL_BLK_SZ() + 1); 
+
         map_inode_blks = 1;       
 
         map_data_blks = 1;
-        data_max = (deadpool_super.sz_disk / DEADPOOL_BLK_SZ() - map_inode_blks - map_data_blks - super_blks) / 2; 
+        data_max = (deadpool_super.sz_disk / DEADPOOL_BLK_SZ() - map_inode_blks - map_data_blks - super_blks - inode_blks); 
                                                       /* 布局layout */
         deadpool_super_d.max_ino = inode_num; 
         deadpool_super_d.file_max = data_max;
@@ -695,7 +698,7 @@ int deadpool_mount(struct custom_options options){
         deadpool_super_d.map_inode_offset = DEADPOOL_SUPER_OFS + DEADPOOL_BLKS_SZ(super_blks);
         deadpool_super_d.map_data_offset = deadpool_super_d.map_inode_offset + DEADPOOL_BLKS_SZ(map_inode_blks);
         deadpool_super_d.inode_offset = deadpool_super_d.map_data_offset + DEADPOOL_BLKS_SZ(map_data_blks);
-        deadpool_super_d.data_offset = deadpool_super_d.inode_offset + DEADPOOL_BLKS_SZ(inode_num);
+        deadpool_super_d.data_offset = deadpool_super_d.inode_offset + DEADPOOL_BLKS_SZ(inode_blks);
 
         deadpool_super_d.map_inode_blks  = map_inode_blks;
         deadpool_super_d.map_data_blks = map_data_blks;

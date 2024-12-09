@@ -62,14 +62,12 @@ typedef enum deadpool_file_type {
 #define DEADPOOL_BLKS_SZ(blks)               ((blks) * DEADPOOL_BLK_SZ())
 #define DEADPOOL_ASSIGN_FNAME(pdeadpool_dentry, _fname)\
                                         memcpy(pdeadpool_dentry->fname, _fname, strlen(_fname))
-#define DEADPOOL_INO_OFS(ino)                (deadpool_super.inode_offset + (ino) * DEADPOOL_BLKS_SZ((\
-                                        DEADPOOL_INODE_PER_FILE)))
+#define DEADPOOL_INO_OFS(ino)                (deadpool_super.inode_offset + (ino) * sizeof(struct deadpool_inode_d))
 #define DEADPOOL_DATA_OFS(bno)               (deadpool_super.data_offset + (bno) * DEADPOOL_BLKS_SZ(DEADPOOL_INODE_PER_FILE))
 
 #define DEADPOOL_IS_DIR(pinode)              (pinode->dentry->ftype == DEADPOOL_DIR)
 #define DEADPOOL_IS_REG(pinode)              (pinode->dentry->ftype == DEADPOOL_REG_FILE)
 #define DEADPOOL_IS_SYM_LINK(pinode)         (pinode->dentry->ftype == DEADPOOL_SYM_LINK)
-
 
 #endif /* _TYPES_H_ */
 
@@ -79,6 +77,7 @@ typedef enum deadpool_file_type {
 
 struct deadpool_dentry;
 struct deadpool_inode;
+struct deadpool_inode_d;
 struct deadpool_super;
 
 struct custom_options {

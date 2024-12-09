@@ -157,9 +157,10 @@ int deadpool_drop_dentry(struct deadpool_inode * inode, struct deadpool_dentry *
     }
     inode->dir_cnt--;
     inode->size -= sizeof(struct deadpool_dentry_d);
-    // if(DEADPOOL_ROUND_UP(inode->size, DEADPOOL_BLK_SZ) != DEADPOOL_ROUND_UP(inode->size, DEADPOOL_BLK_SZ)){
-
-    // }
+    if(DEADPOOL_ROUND_UP(inode->size, (DEADPOOL_BLK_SZ())) != DEADPOOL_ROUND_UP(inode->size, DEADPOOL_BLK_SZ())){
+        inode->block_pointer[inode->block_alloc] = -1;
+        inode->block_alloc--;
+    }
     return inode->dir_cnt;
 }
 
@@ -681,12 +682,12 @@ int deadpool_mount(struct custom_options options){
                                                                 /* 估算各部分大小 */
         super_blks = 1;
 
-        inode_num  =  585;
+        inode_num  =  (deadpool_super.sz_disk) / (sizeof(struct deadpool_inode_d) + 6 * DEADPOOL_BLK_SZ());
 
         map_inode_blks = 1;       
 
         map_data_blks = 1;
-        data_max = 3508; 
+        data_max = (deadpool_super.sz_disk / DEADPOOL_BLK_SZ() - map_inode_blks - map_data_blks - super_blks) / 2; 
                                                       /* 布局layout */
         deadpool_super_d.max_ino = inode_num; 
         deadpool_super_d.file_max = data_max;
@@ -731,7 +732,7 @@ int deadpool_mount(struct custom_options options){
     }
 
     if (is_init) {                                    /* 分配根节点 */
-        root_inode = deadpool_alloc_inode(root_dentry);
+        root_inode = deadpool_alloc_inode(root_dentry);//第一次挂载分配0号inode
         deadpool_sync_inode(root_inode);
     }
     
@@ -792,7 +793,7 @@ int deadpool_umount() {
     //     return -DEADPOOL_ERROR_IO;
     // }
 
-    deadpool_drop_inode(deadpool_super.root_dentry->inode);
+    // deadpool_drop_inode(deadpool_super.root_dentry->inode);
     free(deadpool_super.map_inode);
     free(deadpool_super.map_data);
     ddriver_close(DEADPOOL_DRIVER());

@@ -156,6 +156,10 @@ int deadpool_drop_dentry(struct deadpool_inode * inode, struct deadpool_dentry *
         return -DEADPOOL_ERROR_NOTFOUND;
     }
     inode->dir_cnt--;
+    inode->size -= sizeof(struct deadpool_dentry_d);
+    // if(DEADPOOL_ROUND_UP(inode->size, DEADPOOL_BLK_SZ) != DEADPOOL_ROUND_UP(inode->size, DEADPOOL_BLK_SZ)){
+
+    // }
     return inode->dir_cnt;
 }
 
@@ -282,12 +286,6 @@ int deadpool_sync_inode(struct deadpool_inode * inode) {
     }
 
     int offset;
-    
-    if (deadpool_driver_write(DEADPOOL_INO_OFS(ino), (uint8_t *)&inode_d, 
-                     sizeof(struct deadpool_inode_d)) != DEADPOOL_ERROR_NONE) {
-        DEADPOOL_DBG("[%s] io error\n", __func__);
-        return -DEADPOOL_ERROR_IO;
-    }
                                                       /* Cycle 1: 写 INODE */
                                                       /* Cycle 2: 写 数据 */
     if (DEADPOOL_IS_DIR(inode)) {
@@ -321,21 +319,34 @@ int deadpool_sync_inode(struct deadpool_inode * inode) {
         
     }
     else if (DEADPOOL_IS_REG(inode)) {
-        // if (deadpool_driver_write(DEADPOOL_DATA_OFS(ino), inode->data, 
-        //                      DEADPOOL_BLKS_SZ(DEADPOOL_DATA_PER_FILE)) != DEADPOOL_ERROR_NONE) {
-        //     DEADPOOL_DBG("[%s] io error\n", __func__);
-        //     return -DEADPOOL_ERROR_IO;
-        // }
         uint8_t* temp_data = inode->data;
-        for(int i = 0; i < inode->block_alloc; i++){
+        int temp_size;
+        for(int i = 0; i < DEADPOOL_DATA_PER_FILE; i++){
+            if(temp_size >= inode->size) break;
+            if(i == inode->block_alloc){
+                inode->block_pointer[i] = deadpool_alloc_data();
+                inode->block_alloc++;
+            }
             if (deadpool_driver_write(DEADPOOL_DATA_OFS(inode->block_pointer[i]), temp_data, 
                                 DEADPOOL_BLK_SZ()) != DEADPOOL_ERROR_NONE) {
                 DEADPOOL_DBG("[%s] io error\n", __func__);
                 return -DEADPOOL_ERROR_IO;
             }
             temp_data += DEADPOOL_BLK_SZ();
+            temp_size += DEADPOOL_BLK_SZ();
+        }
+        inode_d.block_alloc   = inode->block_alloc;
+        for(int i = 0; i < inode->block_alloc; i++){
+            inode_d.block_pointer[i] = inode->block_pointer[i];
         }
     }
+
+    if (deadpool_driver_write(DEADPOOL_INO_OFS(ino), (uint8_t *)&inode_d, 
+                     sizeof(struct deadpool_inode_d)) != DEADPOOL_ERROR_NONE) {
+        DEADPOOL_DBG("[%s] io error\n", __func__);
+        return -DEADPOOL_ERROR_IO;
+    }
+
     return DEADPOOL_ERROR_NONE;
 }
 
@@ -381,6 +392,8 @@ int deadpool_drop_inode(struct deadpool_inode * inode) {
         return DEADPOOL_ERROR_INVAL;
     }
 
+    deadpool_drop_data(inode);
+    
     if (DEADPOOL_IS_DIR(inode)) {
         dentry_cursor = inode->dentrys;
                                                       /* 递归向下drop */
@@ -413,6 +426,31 @@ int deadpool_drop_inode(struct deadpool_inode * inode) {
         if (inode->data)
             free(inode->data);
         free(inode);
+    }
+    return DEADPOOL_ERROR_NONE;
+}
+
+int deadpool_drop_data(struct deadpool_inode * inode){
+    for(int i = 0; i < inode->block_alloc; i++){
+        int byte_cursor = 0; 
+        int bit_cursor  = 0; 
+        int data_cursor  = 0;
+        boolean is_find = FALSE;
+        for (byte_cursor = 0; byte_cursor < DEADPOOL_BLKS_SZ(deadpool_super.map_data_blks); 
+                byte_cursor++)                            /* 调整inodemap */
+            {
+                for (bit_cursor = 0; bit_cursor < UINT8_BITS; bit_cursor++) {
+                    if (data_cursor == inode->block_pointer[i]) {
+                        deadpool_super.map_data[byte_cursor] &= (uint8_t)(~(0x1 << bit_cursor));
+                        is_find = TRUE;
+                        break;
+                    }
+                    data_cursor++;
+                }
+                if (is_find == TRUE) {
+                    break;
+                }
+            }
     }
     return DEADPOOL_ERROR_NONE;
 }
@@ -458,9 +496,10 @@ struct deadpool_inode* deadpool_read_inode(struct deadpool_dentry * dentry, int 
         // inode->dir_cnt = dir_cnt;
         int blk_no = 0;
         int size = 0;
-        for (i = 0; i < dir_cnt && blk_no < DEADPOOL_DATA_PER_FILE; i++)
+        int temp_i = 0;
+        for (i = 0; i < dir_cnt && blk_no < inode_d.block_alloc; i++)
         {
-            if (deadpool_driver_read(DEADPOOL_DATA_OFS(inode_d.block_pointer[blk_no]) + i * sizeof(struct deadpool_dentry_d), 
+            if (deadpool_driver_read(DEADPOOL_DATA_OFS(inode_d.block_pointer[blk_no]) + (i - temp_i) * sizeof(struct deadpool_dentry_d), 
                                 (uint8_t *)&dentry_d, 
                                 sizeof(struct deadpool_dentry_d)) != DEADPOOL_ERROR_NONE) {
                 DEADPOOL_DBG("[%s] io error\n", __func__);
@@ -470,6 +509,7 @@ struct deadpool_inode* deadpool_read_inode(struct deadpool_dentry * dentry, int 
             if(size + sizeof(struct deadpool_dentry_d) > DEADPOOL_BLK_SZ()){
                 blk_no++;
                 size = 0;
+                temp_i = i;
             }
             sub_dentry = new_dentry(dentry_d.fname, dentry_d.ftype);
             sub_dentry->parent = inode->dentry;
@@ -752,6 +792,7 @@ int deadpool_umount() {
     //     return -DEADPOOL_ERROR_IO;
     // }
 
+    deadpool_drop_inode(deadpool_super.root_dentry->inode);
     free(deadpool_super.map_inode);
     free(deadpool_super.map_data);
     ddriver_close(DEADPOOL_DRIVER());

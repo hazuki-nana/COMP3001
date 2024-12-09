@@ -82,41 +82,41 @@ struct deadpool_inode;
 struct deadpool_super;
 
 struct custom_options {
-	char*        device;
+	char*        device;//设备
 };
 
 struct deadpool_super {
-    uint32_t magic;
-    int      fd;
+    uint32_t magic;//幻数
+    int      fd;//文件描述符
     /* TODO: Define yourself */
 
-    int           sz_io;
-    int           sz_disk;
-    int           sz_blk;
+    int           sz_io;/*io大小*/
+    int           sz_disk;/*磁盘大小*/
+    int           sz_blk;/*逻辑块大小*/
     int           sz_usage;
     
-    uint8_t*      map_inode;
-    int           map_inode_blks;
-    int           map_inode_offset;
+    uint8_t*      map_inode;/*inode位图*/
+    int           map_inode_blks;/*位图逻辑块数量*/
+    int           map_inode_offset;/*inode位图偏移*/
 
-    uint8_t*      map_data;
-    int           map_data_offset;
-    int           map_data_blks;
+    uint8_t*      map_data;/*数据块位图*/
+    int           map_data_offset;/*数据块偏移*/
+    int           map_data_blks;/*位图逻辑块数量*/
 
-    int           inode_offset;
+    int           inode_offset;/*位图块起始地址偏移*/
     // int           inode_blks;
 
-    int           data_offset;
+    int           data_offset;/*数据块起始地址偏移*/
     // int           data_blks;
 
-    int           max_ino;
-    int           file_max;
+    int           max_ino;/*最大inode数量*/
+    int           file_max;/*最大数据块数量*/
 
-    int           root_ino;
+    int           root_ino;/*根节点ino*/
 
-    boolean       is_mounted;
+    boolean       is_mounted;/*是否挂载*/
 
-    struct deadpool_dentry* root_dentry;
+    struct deadpool_dentry* root_dentry;/*根节点dentry*/
 };
 
 struct deadpool_inode {
@@ -129,22 +129,22 @@ struct deadpool_inode {
 
     int                     block_pointer[DEADPOOL_DATA_PER_FILE];// 数据块指针（可固定分配）
 
-    struct deadpool_dentry* dentry;                        /* 指向inode的父dentry */
+    struct deadpool_dentry* dentry;                        /* 指向inode的父目录项中对应的dentry */
     struct deadpool_dentry* dentrys;                       /* 所有目录项 */
-    uint8_t*                data;      
+    uint8_t*                data;      //内存数据缓冲快，卸载时再写会
 
     int                     dir_cnt; // 如果是目录类型文件，下面有几个目录项
-    int                     block_alloc;
+    int                     block_alloc;//已分配block快数
 
 };
 
 struct deadpool_dentry {
-    char     fname[MAX_NAME_LEN];
+    char     fname[MAX_NAME_LEN];//文件名
     uint32_t ino;
     /* TODO: Define yourself */
-    struct deadpool_dentry* parent; //父目录的dentry
-    struct deadpool_dentry* brother;
-    struct deadpool_inode*  inode;
+    struct deadpool_dentry* parent; //指向父目录的dentry
+    struct deadpool_dentry* brother;//该目录下的兄弟dentry
+    struct deadpool_inode*  inode;//指向该dentry对应的inode
     DEADPOOL_FILE_TYPE      ftype;
 };
 

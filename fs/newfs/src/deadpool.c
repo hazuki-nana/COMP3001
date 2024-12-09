@@ -31,17 +31,17 @@ static struct fuse_operations operations = {
 	.getattr = deadpool_getattr,				 /* 获取文件属性，类似stat，必须完成 */
 	.readdir = deadpool_readdir,				 /* 填充dentrys */
 	.mknod = deadpool_mknod,					 /* 创建文件，touch相关 */
-	.write = NULL,								  	 /* 写入文件 */
-	.read = NULL,								  	 /* 读文件 */
+	.write = deadpool_write,								  	 /* 写入文件 */
+	.read = deadpool_read,								  	 /* 读文件 */
 	.utimens = deadpool_utimens,				 /* 修改时间，忽略，避免touch报错 */
-	.truncate = NULL,						  		 /* 改变文件大小 */
-	.unlink = NULL,							  		 /* 删除文件 */
-	.rmdir	= NULL,							  		 /* 删除目录， rm -r */
-	.rename = NULL,							  		 /* 重命名，mv */
+	.truncate = deadpool_truncate,						  		 /* 改变文件大小 */
+	.unlink = deadpool_unlink,							  		 /* 删除文件 */
+	.rmdir	= deadpool_rmdir,							  		 /* 删除目录， rm -r */
+	.rename = deadpool_rename,							  		 /* 重命名，mv */
 
-	.open = NULL,							
-	.opendir = NULL,
-	.access = NULL
+	.open = deadpool_open,							
+	.opendir = deadpool_opendir,
+	.access = deadpool_access
 };
 /******************************************************************************
 * SECTION: 必做函数实现
@@ -261,6 +261,27 @@ int deadpool_utimens(const char* path, const struct timespec tv[2]) {
 int deadpool_write(const char* path, const char* buf, size_t size, off_t offset,
 		        struct fuse_file_info* fi) {
 	/* 选做 */
+	boolean	is_find, is_root;
+	struct deadpool_dentry* dentry = deadpool_lookup(path, &is_find, &is_root);
+	struct deadpool_inode*  inode;
+	
+	if (is_find == FALSE) {
+		return -DEADPOOL_ERROR_NOTFOUND;
+	}
+
+	inode = dentry->inode;
+	
+	if (DEADPOOL_IS_DIR(inode)) {
+		return -DEADPOOL_ERROR_ISDIR;	
+	}
+
+	if (inode->size < offset) {
+		return -DEADPOOL_ERROR_SEEK;
+	}
+
+	memcpy(inode->data + offset, buf, size);
+	inode->size = offset + size > inode->size ? offset + size : inode->size;
+	
 	return size;
 }
 
@@ -277,7 +298,27 @@ int deadpool_write(const char* path, const char* buf, size_t size, off_t offset,
 int deadpool_read(const char* path, char* buf, size_t size, off_t offset,
 		       struct fuse_file_info* fi) {
 	/* 选做 */
-	return size;			   
+	boolean	is_find, is_root;
+	struct deadpool_dentry* dentry = deadpool_lookup(path, &is_find, &is_root);
+	struct deadpool_inode*  inode;
+
+	if (is_find == FALSE) {
+		return -DEADPOOL_ERROR_NOTFOUND;
+	}
+
+	inode = dentry->inode;
+	
+	if (DEADPOOL_IS_DIR(inode)) {
+		return -DEADPOOL_ERROR_ISDIR;	
+	}
+
+	if (inode->size < offset) {
+		return -DEADPOOL_ERROR_SEEK;
+	}
+
+	memcpy(buf, inode->data + offset, size);
+
+	return size;		   
 }
 
 /**
@@ -288,7 +329,19 @@ int deadpool_read(const char* path, char* buf, size_t size, off_t offset,
  */
 int deadpool_unlink(const char* path) {
 	/* 选做 */
-	return 0;
+	boolean	is_find, is_root;
+	struct deadpool_dentry* dentry = deadpool_lookup(path, &is_find, &is_root);
+	struct deadpool_inode*  inode;
+
+	if (is_find == FALSE) {
+		return -DEADPOOL_ERROR_NOTFOUND;
+	}
+
+	inode = dentry->inode;
+
+	deadpool_drop_inode(inode);
+	deadpool_drop_dentry(dentry->parent->inode, dentry);
+	return DEADPOOL_ERROR_NONE;
 }
 
 /**
@@ -305,7 +358,7 @@ int deadpool_unlink(const char* path) {
  */
 int deadpool_rmdir(const char* path) {
 	/* 选做 */
-	return 0;
+	return deadpool_unlink(path);
 }
 
 /**
@@ -317,7 +370,41 @@ int deadpool_rmdir(const char* path) {
  */
 int deadpool_rename(const char* from, const char* to) {
 	/* 选做 */
-	return 0;
+	int ret = DEADPOOL_ERROR_NONE;
+	boolean	is_find, is_root;
+	struct deadpool_dentry* from_dentry = deadpool_lookup(from, &is_find, &is_root);
+	struct deadpool_inode*  from_inode;
+	struct deadpool_dentry* to_dentry;
+	mode_t mode = 0;
+	if (is_find == FALSE) {
+		return -DEADPOOL_ERROR_NOTFOUND;
+	}
+
+	if (strcmp(from, to) == 0) {
+		return DEADPOOL_ERROR_NONE;
+	}
+
+	from_inode = from_dentry->inode;
+	
+	if (DEADPOOL_IS_DIR(from_inode)) {
+		mode = S_IFDIR;
+	}
+	else if (DEADPOOL_IS_REG(from_inode)) {
+		mode = S_IFREG;
+	}
+	
+	ret = deadpool_mknod(to, mode, NULL);
+	if (ret != DEADPOOL_ERROR_NONE) {					  /* 保证目的文件不存在 */
+		return ret;
+	}
+	
+	to_dentry = deadpool_lookup(to, &is_find, &is_root);	  
+	deadpool_drop_inode(to_dentry->inode);				  /* 保证生成的inode被释放 */	
+	to_dentry->ino = from_inode->ino;				  /* 指向新的inode */
+	to_dentry->inode = from_inode;
+	
+	deadpool_drop_dentry(from_dentry->parent->inode, from_dentry);
+	return ret;
 }
 
 /**
@@ -342,7 +429,7 @@ int deadpool_open(const char* path, struct fuse_file_info* fi) {
  */
 int deadpool_opendir(const char* path, struct fuse_file_info* fi) {
 	/* 选做 */
-	return 0;
+	return DEADPOOL_ERROR_NONE;
 }
 
 /**
@@ -354,7 +441,23 @@ int deadpool_opendir(const char* path, struct fuse_file_info* fi) {
  */
 int deadpool_truncate(const char* path, off_t offset) {
 	/* 选做 */
-	return 0;
+	boolean	is_find, is_root;
+	struct deadpool_dentry* dentry = deadpool_lookup(path, &is_find, &is_root);
+	struct deadpool_inode*  inode;
+	
+	if (is_find == FALSE) {
+		return -DEADPOOL_ERROR_NOTFOUND;
+	}
+	
+	inode = dentry->inode;
+
+	if (DEADPOOL_IS_DIR(inode)) {
+		return -DEADPOOL_ERROR_ISDIR;
+	}
+
+	inode->size = offset;
+
+	return DEADPOOL_ERROR_NONE;
 }
 
 
@@ -372,7 +475,31 @@ int deadpool_truncate(const char* path, off_t offset) {
  */
 int deadpool_access(const char* path, int type) {
 	/* 选做: 解析路径，判断是否存在 */
-	return 0;
+	boolean	is_find, is_root;
+	boolean is_access_ok = FALSE;
+	struct deadpool_dentry* dentry = deadpool_lookup(path, &is_find, &is_root);
+	struct deadpool_inode*  inode;
+
+	switch (type)
+	{
+	case R_OK:
+		is_access_ok = TRUE;
+		break;
+	case F_OK:
+		if (is_find) {
+			is_access_ok = TRUE;
+		}
+		break;
+	case W_OK:
+		is_access_ok = TRUE;
+		break;
+	case X_OK:
+		is_access_ok = TRUE;
+		break;
+	default:
+		break;
+	}
+	return is_access_ok ? DEADPOOL_ERROR_NONE : -DEADPOOL_ERROR_ACCESS;
 }	
 /******************************************************************************
 * SECTION: FUSE入口

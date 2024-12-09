@@ -63,6 +63,7 @@ int						deadpool_alloc_data();
 struct deadpool_inode*  deadpool_alloc_inode(struct deadpool_dentry * dentry);
 int 			   		deadpool_sync_inode(struct deadpool_inode * inode);
 int 			   		deadpool_drop_inode(struct deadpool_inode * inode);
+int 					deadpool_drop_data(struct deadpool_inode * inode);
 struct deadpool_inode*  deadpool_read_inode(struct deadpool_dentry * dentry, int ino);
 struct deadpool_dentry* deadpool_get_dentry(struct deadpool_inode * inode, int dir);
 
